@@ -125,8 +125,8 @@ class EML():
         data.to_csv(self.save_csv_path, index=False, header=self.csv_header)
         print('数据条数为:{0}'.format(len(res)))
 
-    def get_one_video(self,vedio_path,time_len, L, R):
-        vedio = VideoFileClip(vedio_path,audio_fps=SR).set_duration(time_len).subclip(L,R)
+    def get_one_video(self,vedio_path, L, R):
+        vedio = VideoFileClip(vedio_path,audio_fps=SR).subclip(L,R)
         vedio_path.replace(self.data_path,self.save_vedio_dir)
         tmp_list = vedio_path.split(os.path.sep)
         tmp_list[-1] = tmp_list[-1].replace(self.ext,self.save_ext)
@@ -170,14 +170,14 @@ def handwork(i,silence_threshold=1e-2):
     L = csv_data[2]
     R = csv_data[3]
 
-    data_pd.loc[i]['available_time_L'] = L
-    data_pd.loc[i]['available_time_R'] = R
-    data_pd.loc[i]['time_len'] = time_len
+    data_pd.loc[i,['available_time_L']] = L
+    data_pd.loc[i,['available_time_R']] = R
+    data_pd.loc[i,['time_len']] = time_len
     data_pd.to_csv(eml.save_csv_path,index=False, header=eml.csv_header)
 
     eml.plot_audio(path)
     if L < R:
-        eml.get_one_video(path,time_len, L, R)
+        eml.get_one_video(path, L, R)
 
 # 初步预处理
 def batch_processing():
@@ -190,7 +190,7 @@ def batch_processing():
         R = data_pd.loc[i]['available_time_R']
         time_len = data_pd.loc[i]['time_len']
         if L < R:
-            eml.get_one_video(path,time_len,L,R)
+            eml.get_one_video(path,L,R)
         else:
             print(path,L,R)
             count += 1
