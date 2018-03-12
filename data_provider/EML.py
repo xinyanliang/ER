@@ -14,19 +14,46 @@ class EML():
         self.silence_threshold = silence_threshold
 
         # 原始文件设置
-        self.data_path = os.path.join('..', 'data')
-        self.ext = 'avi'
+        self.data_raw = os.path.join('..', 'data_raw')
+        self.data_raw_ext = 'avi'
 
         # 保存文件设置
+        self.data_path = os.path.join('..', 'data')  #format_videos后数据存放文件
+        self.ext = 'mp4'
         self.save_path_type = 1
-        self.save_vedio_dir = os.path.join('..','data1')
+        self.save_vedio_dir = os.path.join('..','data_remove_silence')
         self.save_ext = 'mp4'
         self.save_csv_path = os.path.join(self.data_path, 'data_meta_info.csv')
         self.csv_header = ['path', 'time_len',
                            'available_time_L', 'available_time_R']
 
+    def format_videos(self):
+        '''
+         此函数将所有视频数据使用moviepy重新写入文件，
+        避免后期librosa库和moviepy对于相同的视频，提供时间不一致问题
+        :return:
+        '''
+        base = self.data_raw
+        tar_base = self.data_path
+        if not os.path.exists(tar_base):
+            os.makedirs(tar_base)
+
+        for root, _, names in os.walk(base):
+            for name in names:
+                video = VideoFileClip(os.path.join(base, name))
+                video.write_videofile(os.path.join(tar_base,name.replace(self.data_raw_ext,
+                                                                         self.save_ext)),
+                                      codec='mpeg4', progress_bar=False, verbose=False)
+                video.reader.close()
+                video.audio.reader.close_proc()
 
     def move_vedio_file(self,path):
+        '''
+        将原始文件保留到data_path下，
+        文件命名为：s1_f1_an1.mp4
+        :param path:
+        :return:
+        '''
         if not os.path.exists(self.save_vedio_dir):
             os.makedirs(self.save_vedio_dir)
         for root, _, names in os.walk(path):
@@ -65,7 +92,7 @@ class EML():
 
         def trim_right(y):
             r = 0
-            for i in np.arange(len(y) - 1, -1, -1):
+            for i in np.arange(len(y) - 10000, -1, -1):
                 if y[i] > self.silence_threshold:
                     break
                 r = i
@@ -98,8 +125,8 @@ class EML():
         data.to_csv(self.save_csv_path, index=False, header=self.csv_header)
         print('数据条数为:{0}'.format(len(res)))
 
-    def get_one_video(self,vedio_path, L, R):
-        vedio = VideoFileClip(vedio_path,audio_fps=SR).subclip(L,R)
+    def get_one_video(self,vedio_path,time_len, L, R):
+        vedio = VideoFileClip(vedio_path,audio_fps=SR).set_duration(time_len).subclip(L,R)
         vedio_path.replace(self.data_path,self.save_vedio_dir)
         tmp_list = vedio_path.split(os.path.sep)
         tmp_list[-1] = tmp_list[-1].replace(self.ext,self.save_ext)
@@ -131,23 +158,26 @@ class EML():
         plt.show()
 
 
-# 手工调
+# 手工调one_by_one
 def handwork(i,silence_threshold=1e-2):
     eml = EML()
+    eml.silence_threshold = silence_threshold
     data_pd = pd.read_csv(eml.save_csv_path)
     path = os.path.join(eml.data_path, data_pd.loc[i]['path'])
-    L = data_pd.loc[i]['available_time_L']
-    R = data_pd.loc[i]['available_time_R']
-    audio,sr = librosa.load(path,sr=SR)
-    vedio = VideoFileClip(path,audio_fps=sr).subclip(L, R)
-    # print(data_pd.loc[i]['path'])
+    # [csv_target_name, csv_time,csv_available_time_L, csv_available_time_R]
+    csv_data = eml.get_one_audio_info(path)
+    time_len = csv_data[1]
+    L = csv_data[2]
+    R = csv_data[3]
+
+    data_pd.loc[i]['available_time_L'] = L
+    data_pd.loc[i]['available_time_R'] = R
+    data_pd.loc[i]['time_len'] = time_len
+    data_pd.to_csv(eml.save_csv_path,index=False, header=eml.csv_header)
+
     eml.plot_audio(path)
-    eml.silence_threshold = silence_threshold
     if L < R:
-        print(vedio.duration,
-              librosa.get_duration(filename=path,sr=sr),
-        librosa.get_duration(y=audio,sr=sr))
-        eml.get_one_video(path, L, R)
+        eml.get_one_video(path,time_len, L, R)
 
 # 初步预处理
 def batch_processing():
@@ -160,34 +190,27 @@ def batch_processing():
         R = data_pd.loc[i]['available_time_R']
         time_len = data_pd.loc[i]['time_len']
         if L < R:
-            vedio = VideoFileClip(path,audio_fps=SR).subclip(L,R)
-            if np.abs(time_len-vedio.duration) <0.3: #可能删除
-                eml.get_one_video(path,L,R)
-                count+=1
-            else:
-                print(path, time_len,vedio.duration,L, R)
-            vedio.reader.close()
-            vedio.audio.reader.close_proc()
+            eml.get_one_video(path,time_len,L,R)
         else:
             print(path,L,R)
+            count += 1
             with open(os.path.join(eml.data_path,'d.txt'),'a') as f:
                 f.write(path)
                 f.write('\n')
     print('需进一步处理的数据条数:{0},保存在文件{1}'.format(count,'data.txt'))
 
+
 if __name__ == '__main__':
-    # eml = EML()
+    eml = EML()
+    # eml.pre()
     # eml.move_vedio_file(eml.data_path)
     # eml.get_EML_csv()
-    handwork(i=210,silence_threshold=2e-2)
+    handwork(i=6,silence_threshold=2e-2)
     # batch_processing()
 
-    # "with clip duration=%d seconds, " % self.duration)
-    # OSError: Error in file..\data\s4_f3chi_an1.avi, Accessing
-    # time
-    # t = 3.24 - 3.28
-    # seconds,
-    # with clip duration=3 seconds,
+
+
+
 
 
 
