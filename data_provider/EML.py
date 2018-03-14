@@ -14,6 +14,7 @@ class EML():
         self.silence_threshold = silence_threshold
         self.L_start = 1000
         self.R_start = 10000
+        self.R_start_type = 0  #0：len(y) - self.R_start；1：self.R_start手工调推荐1
         # 原始文件设置
         self.data_raw = os.path.join('..', 'data_raw')
         self.data_raw_ext = 'avi'
@@ -92,11 +93,21 @@ class EML():
             return l
 
         def trim_right(y):
-            r = len(y) - self.R_start
-            for i in np.arange(len(y) - self.R_start-1, -1, -1):
-                if y[i] > self.silence_threshold:
-                    break
-                r = i
+            print(self.R_start_type)
+            if self.R_start_type == 0:
+                r = len(y) - self.R_start
+                print(r)
+                for i in np.arange(len(y) - self.R_start-1, -1, -1):
+                    if y[i] > self.silence_threshold:
+                        break
+                    r = i
+            if self.R_start_type == 1:
+                r = self.R_start
+                print(r)
+                for i in np.arange(self.R_start, -1, -1):
+                    if y[i] > self.silence_threshold:
+                        break
+                    r = i
             return r
 
         left_idx = trim_left(y)
@@ -162,8 +173,10 @@ class EML():
 
 
 # 手工调one_by_one
-def handwork(i,silence_threshold=1e-2,L_start=1000,R_start=10000):
+def handwork(i,silence_threshold=1e-2,L_start=1000,
+             R_start=10000,R_start_type = 1):
     eml = EML()
+    eml.R_start_type = R_start_type # 手工调推荐
     eml.L_start = L_start
     eml.R_start = R_start
     eml.silence_threshold = silence_threshold
