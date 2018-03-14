@@ -12,7 +12,8 @@ SR = 44100
 class EML():
     def __init__(self, silence_threshold = 2e-2):
         self.silence_threshold = silence_threshold
-
+        self.L_start = 1000
+        self.R_start = 10000
         # 原始文件设置
         self.data_raw = os.path.join('..', 'data_raw')
         self.data_raw_ext = 'avi'
@@ -25,7 +26,7 @@ class EML():
         self.save_ext = 'mp4'
         self.save_csv_path = os.path.join(self.data_path, 'data_meta_info.csv')
         self.csv_header = ['path', 'time_len',
-                           'available_time_L', 'available_time_R']
+                           'available_time_L', 'available_time_R','R_L']
 
     def format_videos(self):
         '''
@@ -83,16 +84,16 @@ class EML():
     # 移除音频文件没有声音的区间
     def trim_silence(self,y):
         def trim_left(y):
-            l = 0
-            for i in np.arange(1000, len(y), 1):
+            l = self.L_start
+            for i in np.arange(self.L_start, len(y), 1):
                 if y[i] > self.silence_threshold:
                     break
                 l = i
             return l
 
         def trim_right(y):
-            r = 0
-            for i in np.arange(len(y) - 10000, -1, -1):
+            r = len(y) - self.R_start
+            for i in np.arange(len(y) - self.R_start-1, -1, -1):
                 if y[i] > self.silence_threshold:
                     break
                 r = i
@@ -113,8 +114,9 @@ class EML():
         L, R = self.trim_silence(audio)
         csv_available_time_L = librosa.samples_to_time(L)[0]
         csv_available_time_R = librosa.samples_to_time(R)[0]
+        R_L = csv_available_time_R-csv_available_time_L
         csv_data = [csv_target_name, csv_time,
-                    csv_available_time_L, csv_available_time_R]
+                    csv_available_time_L, csv_available_time_R,R_L]
         return csv_data
 
     def get_EML_csv(self):
@@ -150,6 +152,7 @@ class EML():
         fig, axs = plt.subplots(2, 1)
         y, sr = librosa.core.load(path)
         L, R = self.trim_silence(y)
+        print(L,R)
         axs[0].plot(y)
         axs[0].set_title(path.split(os.path.sep)[-1])
         y1 = np.zeros(len(y))
@@ -159,20 +162,23 @@ class EML():
 
 
 # 手工调one_by_one
-def handwork(i,silence_threshold=1e-2):
+def handwork(i,silence_threshold=1e-2,L_start=1000,R_start=10000):
     eml = EML()
+    eml.L_start = L_start
+    eml.R_start = R_start
     eml.silence_threshold = silence_threshold
     data_pd = pd.read_csv(eml.save_csv_path)
-    path = os.path.join(eml.data_path, data_pd.loc[i]['path'])
+    path = os.path.join(eml.data_path, data_pd.loc[i,'path'])
     # [csv_target_name, csv_time,csv_available_time_L, csv_available_time_R]
     csv_data = eml.get_one_audio_info(path)
     time_len = csv_data[1]
     L = csv_data[2]
     R = csv_data[3]
 
-    data_pd.loc[i,['available_time_L']] = L
-    data_pd.loc[i,['available_time_R']] = R
-    data_pd.loc[i,['time_len']] = time_len
+    data_pd.loc[i,'available_time_L'] = L
+    data_pd.loc[i,'available_time_R'] = R
+    data_pd.loc[i,'time_len'] = time_len
+    data_pd.loc[i,'R_L'] = R-L
     data_pd.to_csv(eml.save_csv_path,index=False, header=eml.csv_header)
 
     eml.plot_audio(path)
@@ -185,10 +191,9 @@ def batch_processing():
     data_pd = pd.read_csv(eml.save_csv_path)
     count = 0
     for i in range(720):
-        path = os.path.join(eml.data_path, data_pd.loc[i]['path'])
-        L = data_pd.loc[i]['available_time_L']
-        R = data_pd.loc[i]['available_time_R']
-        time_len = data_pd.loc[i]['time_len']
+        path = os.path.join(eml.data_path, data_pd.loc[i,'path'])
+        L = data_pd.loc[i,'available_time_L']
+        R = data_pd.loc[i,'available_time_R']
         if L < R:
             eml.get_one_video(path,L,R)
         else:
@@ -205,12 +210,6 @@ if __name__ == '__main__':
     # eml.pre()
     # eml.move_vedio_file(eml.data_path)
     # eml.get_EML_csv()
-    handwork(i=6,silence_threshold=2e-2)
     # batch_processing()
-
-
-
-
-
-
+    handwork(i=718-2,silence_threshold=5e-3,L_start=48000,R_start=48000)
 
