@@ -4,12 +4,11 @@ import os
 import librosa
 from multiprocessing import Pool
 import pandas as pd
-import shutil
 import matplotlib.pyplot as plt
 from moviepy.editor import VideoFileClip
 
 SR = 44100
-class EML():
+class EML_process():
     def __init__(self, silence_threshold = 2e-2):
         self.silence_threshold = silence_threshold
         self.L_start = 1000
@@ -175,7 +174,7 @@ class EML():
 # 手工调one_by_one
 def handwork(i,silence_threshold=1e-2,L_start=1000,
              R_start=10000,R_start_type = 1):
-    eml = EML()
+    eml = EML_process()
     eml.R_start_type = R_start_type # 手工调推荐
     eml.L_start = L_start
     eml.R_start = R_start
@@ -200,7 +199,7 @@ def handwork(i,silence_threshold=1e-2,L_start=1000,
 
 # 初步预处理
 def batch_processing():
-    eml = EML()
+    eml = EML_process()
     data_pd = pd.read_csv(eml.save_csv_path)
     count = 0
     for i in range(720):
@@ -219,10 +218,10 @@ def batch_processing():
 
 
 if __name__ == '__main__':
-    eml = EML()
+    eml = EML_process()
     # eml.pre()
     # eml.move_vedio_file(eml.data_path)
     # eml.get_EML_csv()
     # batch_processing()
-    handwork(i=718-2,silence_threshold=5e-3,L_start=48000,R_start=48000)
+    handwork(i=718-2,silence_threshold=5e-3,L_start=48000,R_start=48000,R_start_type=0)
 
